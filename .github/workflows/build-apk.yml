@@ -38,7 +38,7 @@ jobs:
           gradle-version: '8.11.1'
 
       - name: Unpack project ZIP
-        run: unzip -q FlipSilence-AndroidStudio-Project-CloudBuild-v1.0.1.zip -d source
+        run: unzip -q FlipSilence-AndroidStudio-Project-CloudBuild-v1.0.1-fixed.zip -d source
 
       - name: Build debug APK
         working-directory: source/FlipSilence
