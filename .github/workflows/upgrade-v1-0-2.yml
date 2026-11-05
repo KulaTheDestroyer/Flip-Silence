@@ -1,0 +1,214 @@
+
+name: Upgrade Flip Silence to v1.0.2
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  upgrade-and-build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          ref: main
+
+      - name: Unpack project
+        run: unzip -q FlipSilence-AndroidStudio-Project-CloudBuild-v1.0.1-fixed.zip -d source
+
+      - name: Apply v1.0.2 improvements
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          root = Path("source/FlipSilence/app/src/main")
+          java = root / "java/com/flipsilence/app"
+
+          manifest = root / "AndroidManifest.xml"
+          s = manifest.read_text()
+          assert 'android.permission.VIBRATE' not in s
+          s = s.replace(
+              '<uses-permission android:name="android.permission.WAKE_LOCK" />',
+              '<uses-permission android:name="android.permission.WAKE_LOCK" />\n    <uses-permission android:name="android.permission.VIBRATE" />'
+          )
+          manifest.write_text(s)
+
+          settings = java / "Settings.kt"
+          s = settings.read_text()
+          anchor = '    fun wasOurs(c: Context)'
+          assert anchor in s
+          s = s.replace(anchor, '''    fun vibrationOnEnable(c: Context) = p(c).getBoolean("vibration_on_enable", vibration(c))
+              fun setVibrationOnEnable(c: Context, v: Boolean) = p(c).edit().putBoolean("vibration_on_enable", v).apply()
+              fun vibrationOnDisable(c: Context) = p(c).getBoolean("vibration_on_disable", vibration(c))
+              fun setVibrationOnDisable(c: Context, v: Boolean) = p(c).edit().putBoolean("vibration_on_disable", v).apply()
+
+          ''' + anchor)
+          settings.write_text(s)
+
+          service = java / "FlipMonitorService.kt"
+          s = service.read_text()
+          start = s.index("    private fun playConfirmation(enable: Boolean)")
+          end = s.index("    private fun isExcluded()", start)
+          replacement = '''    private fun playConfirmation(enable: Boolean) {
+                  val soundEnabled = if (enable) Settings.soundOnEnable(this) else Settings.soundOnDisable(this)
+                  val vibrationEnabled = if (enable) Settings.vibrationOnEnable(this) else Settings.vibrationOnDisable(this)
+
+                  if (soundEnabled) {
+                      val volume = Settings.soundVolume(this)
+                      if (volume > 0) {
+                          val tone = when (Settings.soundTone(this)) {
+                              1 -> ToneGenerator.TONE_PROP_ACK
+                              2 -> ToneGenerator.TONE_PROP_BEEP2
+                              else -> ToneGenerator.TONE_PROP_BEEP
+                          }
+                          try {
+                              val generator = ToneGenerator(AudioManager.STREAM_MUSIC, volume.coerceIn(0, 100))
+                              generator.startTone(tone, 650)
+                              handler.postDelayed({
+                                  try { generator.release() } catch (_: Exception) { }
+                              }, 900L)
+                          } catch (e: Exception) {
+                              Log.w(TAG, "Could not play confirmation tone", e)
+                          }
+                      }
+                  }
+
+                  if (vibrationEnabled) {
+                      try {
+                          if (Build.VERSION.SDK_INT >= 31) {
+                              val vibrator = (getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager).defaultVibrator
+                              if (vibrator.hasVibrator()) {
+                                  vibrator.vibrate(android.os.VibrationEffect.createOneShot(140, 190))
+                              }
+                          } else {
+                              @Suppress("DEPRECATION")
+                              val vibrator = getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+                              @Suppress("DEPRECATION")
+                              vibrator.vibrate(140L)
+                          }
+                      } catch (e: Exception) {
+                          Log.w(TAG, "Could not vibrate", e)
+                      }
+                  }
+              }
+
+          '''
+          s = s[:start] + replacement + s[end:]
+          service.write_text(s)
+
+          main = java / "MainActivity.kt"
+          s = main.read_text()
+
+          assert 'import androidx.compose.foundation.verticalScroll' in s
+          s = s.replace(
+              'import androidx.compose.foundation.verticalScroll',
+              'import androidx.compose.foundation.verticalScroll\nimport androidx.compose.foundation.horizontalScroll\nimport android.media.AudioManager\nimport android.media.ToneGenerator'
+          )
+
+          s = s.replace(
+              'Modifier.fillMaxSize().background(Bg).verticalScroll(rememberScrollState()).padding(20.dp)',
+              'Modifier.fillMaxSize().background(Bg).safeDrawingPadding().verticalScroll(rememberScrollState()).padding(20.dp)'
+          )
+
+          s = s.replace(
+              'Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {\n                    names.forEachIndexed',
+              'Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(3.dp)) {\n                    names.forEachIndexed'
+          )
+
+          old_state = '    var vibration by remember { mutableStateOf(Settings.vibration(context)) }'
+          assert old_state in s
+          s = s.replace(old_state, '''    var vibrationEnable by remember { mutableStateOf(Settings.vibrationOnEnable(context)) }
+              var vibrationDisable by remember { mutableStateOf(Settings.vibrationOnDisable(context)) }''')
+
+          old_ui = '                SettingSwitch("Wibracja przy zmianie trybu", vibration) { vibration = it; Settings.setVibration(context, it) }'
+          assert old_ui in s
+          s = s.replace(old_ui, '''                SettingSwitch("Wibracja przy włączaniu DND", vibrationEnable) { vibrationEnable = it; Settings.setVibrationOnEnable(context, it) }
+                      SettingSwitch("Wibracja przy wyłączaniu DND", vibrationDisable) { vibrationDisable = it; Settings.setVibrationOnDisable(context, it) }''')
+
+          tone_ui = '''                    }
+                  }
+                  Text("Głośność sygnału: $soundVolume%", color = Color.White)'''
+          assert tone_ui in s
+          s = s.replace(tone_ui, '''                    }
+                  }
+                  OutlinedButton(
+                      onClick = { playTonePreview(soundTone, soundVolume) },
+                      modifier = Modifier.fillMaxWidth()
+                  ) {
+                      Text("Odsłuchaj wybrany sygnał")
+                  }
+                  Text("Głośność sygnału: $soundVolume%", color = Color.White)''')
+
+          s = s.replace('Wersja 1.0.0 • Flip Silence', 'Wersja 1.0.2 • Flip Silence')
+
+          s += '''
+
+          private fun playTonePreview(toneIndex: Int, volume: Int) {
+              if (volume <= 0) return
+              val tone = when (toneIndex) {
+                  1 -> ToneGenerator.TONE_PROP_ACK
+                  2 -> ToneGenerator.TONE_PROP_BEEP2
+                  else -> ToneGenerator.TONE_PROP_BEEP
+              }
+              try {
+                  val generator = ToneGenerator(AudioManager.STREAM_MUSIC, volume.coerceIn(0, 100))
+                  generator.startTone(tone, 650)
+                  android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                      try { generator.release() } catch (_: Exception) { }
+                  }, 900L)
+              } catch (_: Exception) { }
+          }
+          '''
+          main.write_text(s)
+          print("v1.0.2 source changes applied successfully")
+          PY
+
+      - name: Prepare updated source archive
+        run: |
+          cd source
+          zip -qr ../FlipSilence-AndroidStudio-Project-CloudBuild-v1.0.2.zip FlipSilence
+          cd ..
+
+      - name: Create separate version branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b flip-silence-v1.0.2
+          git add FlipSilence-AndroidStudio-Project-CloudBuild-v1.0.2.zip
+          git commit -m "Prepare Flip Silence v1.0.2"
+          git push origin flip-silence-v1.0.2
+
+      - name: Set up Java
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+        with:
+          packages: 'platform-tools'
+
+      - name: Install SDK packages
+        run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          gradle-version: '8.11.1'
+
+      - name: Build debug APK
+        working-directory: source/FlipSilence
+        run: gradle --no-daemon assembleDebug
+
+      - name: Upload APK and source
+        uses: actions/upload-artifact@v7
+        with:
+          name: Flip-Silence-v1.0.2
+          path: |
+            source/FlipSilence/app/build/outputs/apk/debug/app-debug.apk
+            FlipSilence-AndroidStudio-Project-CloudBuild-v1.0.2.zip
