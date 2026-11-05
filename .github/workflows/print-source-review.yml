@@ -1,0 +1,29 @@
+
+name: Print Flip Silence source for review
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Unpack Android Studio project
+        run: unzip -q FlipSilence-AndroidStudio-Project-CloudBuild-v1.0.1-fixed.zip -d source
+
+      - name: List source files
+        run: find source/FlipSilence -type f | sort
+
+      - name: Print Kotlin and XML source
+        run: |
+          find source/FlipSilence/app/src -type f \( -name '*.kt' -o -name '*.xml' \) -print0 | sort -z | while IFS= read -r -d '' file; do
+            echo
+            echo "========== SOURCE FILE: $file =========="
+            cat "$file"
+          done
