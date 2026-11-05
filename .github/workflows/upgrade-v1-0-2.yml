@@ -129,11 +129,19 @@ jobs:
           s = s.replace(old_ui, '''                SettingSwitch("Wibracja przy włączaniu DND", vibrationEnable) { vibrationEnable = it; Settings.setVibrationOnEnable(context, it) }
                       SettingSwitch("Wibracja przy wyłączaniu DND", vibrationDisable) { vibrationDisable = it; Settings.setVibrationOnDisable(context, it) }''')
 
-          tone_ui = '''                    }
+                    tone_anchor = 'Text("Głośność sygnału: $soundVolume%", color = Color.White)'
+          assert tone_anchor in s, "Nie znaleziono miejsca na przycisk odsłuchu"
+          s = s.replace(
+              tone_anchor,
+              """OutlinedButton(
+                      onClick = { playTonePreview(soundTone, soundVolume) },
+                      modifier = Modifier.fillMaxWidth()
+                  ) {
+                      Text("Odsłuchaj wybrany sygnał")
                   }
-                  Text("Głośność sygnału: $soundVolume%", color = Color.White)'''
-          assert tone_ui in s
-          s = s.replace(tone_ui, '''                    }
+                  """ + tone_anchor,
+              1
+          )                    }
                   }
                   OutlinedButton(
                       onClick = { playTonePreview(soundTone, soundVolume) },
