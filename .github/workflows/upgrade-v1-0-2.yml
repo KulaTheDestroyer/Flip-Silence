@@ -129,7 +129,7 @@ jobs:
           s = s.replace(old_ui, '''                SettingSwitch("Wibracja przy włączaniu DND", vibrationEnable) { vibrationEnable = it; Settings.setVibrationOnEnable(context, it) }
                       SettingSwitch("Wibracja przy wyłączaniu DND", vibrationDisable) { vibrationDisable = it; Settings.setVibrationOnDisable(context, it) }''')
 
-                    tone_anchor = 'Text("Głośność sygnału: $soundVolume%", color = Color.White)'
+          tone_anchor = 'Text("Głośność sygnału: $soundVolume%", color = Color.White)'
           assert tone_anchor in s, "Nie znaleziono miejsca na przycisk odsłuchu"
           s = s.replace(
               tone_anchor,
@@ -141,15 +141,7 @@ jobs:
                   }
                   """ + tone_anchor,
               1
-          )                    }
-                  }
-                  OutlinedButton(
-                      onClick = { playTonePreview(soundTone, soundVolume) },
-                      modifier = Modifier.fillMaxWidth()
-                  ) {
-                      Text("Odsłuchaj wybrany sygnał")
-                  }
-                  Text("Głośność sygnału: $soundVolume%", color = Color.White)''')
+          )
 
           s = s.replace('Wersja 1.0.0 • Flip Silence', 'Wersja 1.0.2 • Flip Silence')
 
