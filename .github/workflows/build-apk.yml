@@ -17,8 +17,8 @@ jobs:
 
       - name: Extract project ZIP
         run: |
-          test -f FlipSilence1.1.0.zip
-          unzip -q FlipSilence1.1.0.zip -d .
+          test -f FlipSilence1.1.1.zip
+          unzip -q FlipSilence1.1.1.zip -d .
           test -f FlipSilence/settings.gradle.kts
           test -f FlipSilence/app/build.gradle.kts
 
