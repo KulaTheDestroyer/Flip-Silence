@@ -7,7 +7,7 @@ on:
         description: 'Nazwa archiwum ZIP w katalogu głównym repozytorium GitHub'
         required: true
         type: string
-        default: 'FlipSilence1.3.2.zip'
+        default: 'FlipSilence1.3.3.zip'
   push:
     branches: [ main ]
 
