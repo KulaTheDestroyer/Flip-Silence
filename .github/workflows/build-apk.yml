@@ -17,8 +17,8 @@ jobs:
 
       - name: Extract project ZIP
         run: |
-          test -f FlipSilence1.3.0.zip
-          unzip -q FlipSilence1.3.0.zip -d .
+          test -f FlipSilence1.3.1.zip
+          unzip -q FlipSilence1.3.1.zip -d .
           test -f FlipSilence/settings.gradle.kts
           test -f FlipSilence/app/build.gradle.kts
 
@@ -50,6 +50,6 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Flip-Silence-1.3.0-debug-APK
+          name: Flip-Silence-1.3.1-debug-APK
           path: FlipSilence/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
